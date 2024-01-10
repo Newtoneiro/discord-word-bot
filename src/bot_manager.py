@@ -9,7 +9,7 @@ from tempfile import NamedTemporaryFile
 import shutil
 
 from src.config import GlobalConfig
-from src.utils import execute_if_not_busy
+from src.utils import BusyContextManager
 
 
 BOT = commands.Bot(
@@ -27,228 +27,250 @@ async def on_ready():
 
 
 @BOT.command(name='t')
-@execute_if_not_busy
 async def translate(ctx, *args):
-    if len(args) == 0:
-        await ctx.send("🤔 Podaj słowo / słowa do przetłumaczenia.")
-        try:
-            m = await BOT.wait_for(
-                'message',
-                check=lambda m: m.author == ctx.author,
-                timeout=GlobalConfig().TIMEOUT  # Timeout set to 10 seconds
-            )
-            args = m.content.split()
-        except TimeoutError:
-            await ctx.send("⏰ Nie podałeś słowa / słów do przetłumaczenia.")
-            return
+    if BusyContextManager.is_busy():
+        return
 
-    for arg in args:
-        translation = translator.translate(arg.lower(), dest='pl')
-        await ctx.send(f"👉 {arg} -> {translation.text}")
+    with BusyContextManager():
+        if len(args) == 0:
+            await ctx.send("🤔 Podaj słowo / słowa do przetłumaczenia.")
+            try:
+                m = await BOT.wait_for(
+                    'message',
+                    check=lambda m: m.author == ctx.author,
+                    timeout=GlobalConfig().TIMEOUT  # Timeout set to 10 seconds
+                )
+                args = m.content.split()
+            except TimeoutError:
+                await ctx.send("⏰ Nie podałeś słowa / słów do przetłumaczenia.")
+                return
+
+        for arg in args:
+            translation = translator.translate(arg.lower(), dest='pl')
+            await ctx.send(f"👉 {arg} -> {translation.text}")
 
 
 @BOT.command(name='a')
-@execute_if_not_busy
 async def add_to_dictionary(ctx, *args):
-    if len(args) == 0:
-        await ctx.send("🤔 Podaj słowo / słowa do przetłumaczenia i dodania.")
-        try:
-            m = await BOT.wait_for(
-                'message',
-                check=lambda m: m.author == ctx.author,
-                timeout=GlobalConfig().TIMEOUT
-            )
-            args = m.content.split()
-        except TimeoutError:
-            await ctx.send("⏰ Nie podałeś słowa / słów do przetłumaczenia.")
-            return
+    if BusyContextManager.is_busy():
+        return
 
-    with open(
-            GlobalConfig().DATABASE, 'a+', encoding="utf-8", newline=''
-            ) as csvfile:
-        writer = csv.writer(csvfile)
-        for word in args:
-            translation = translator.translate(word.lower(), dest='pl')
-            await ctx.send(f"👉 {word} -> {translation.text.lower()}")
-            writer.writerow([word, translation.text.lower(), time()])
+    with BusyContextManager():
+        if len(args) == 0:
+            await ctx.send("🤔 Podaj słowo / słowa do przetłumaczenia i dodania.")
+            try:
+                m = await BOT.wait_for(
+                    'message',
+                    check=lambda m: m.author == ctx.author,
+                    timeout=GlobalConfig().TIMEOUT
+                )
+                args = m.content.split()
+            except TimeoutError:
+                await ctx.send("⏰ Nie podałeś słowa / słów do przetłumaczenia.")
+                return
 
-    await ctx.send("😙 Słowa dodane do słownika.")
+        with open(
+                GlobalConfig().DATABASE, 'a+', encoding="utf-8", newline=''
+                ) as csvfile:
+            writer = csv.writer(csvfile)
+            for word in args:
+                translation = translator.translate(word.lower(), dest='pl')
+                await ctx.send(f"👉 {word} -> {translation.text.lower()}")
+                writer.writerow([word, translation.text.lower(), time()])
+
+        await ctx.send("😙 Słowa dodane do słownika.")
 
 
 @BOT.command(name='l')
-@execute_if_not_busy
 async def learn(ctx, *args):
-    if len(args) != 1:
-        await ctx.send("🤔 Podaj ilość słów:")
-        try:
-            m = await BOT.wait_for(
-                'message',
-                check=lambda m: m.author == ctx.author,
-                timeout=GlobalConfig().TIMEOUT
-            )
-            args = m.content.split()
-        except TimeoutError:
-            await ctx.send("⏰ Nie podałeś ilości słów do nauki.")
-            return
+    if BusyContextManager.is_busy():
+        return
 
-    wrong_words = []
-    selected_words = []
+    with BusyContextManager():
+        if len(args) != 1:
+            await ctx.send("🤔 Podaj ilość słów:")
+            try:
+                m = await BOT.wait_for(
+                    'message',
+                    check=lambda m: m.author == ctx.author,
+                    timeout=GlobalConfig().TIMEOUT
+                )
+                if not m.content.isdigit() or int(m.content) < 1:
+                    raise ValueError
+                args = m.content.split()
+                if len(args) != 1:
+                    raise ValueError
+            except ValueError:
+                await ctx.send("🤡 Podaj poprawną liczbę")
+                return
+            except TimeoutError:
+                await ctx.send("⏰ Nie podałeś ilości słów do nauki.")
+                return
 
-    with open(GlobalConfig().DATABASE, 'r', encoding="utf-8") as csvfile:
-        reader = csv.reader(csvfile)
-        all_words = [row for row in reader]
+        wrong_words = []
+        selected_words = []
 
-    no_words = min(int(args[0]), len(all_words))
-    for nr in range(1, no_words + 1):
-        word = choice(all_words)
-        while word in selected_words and \
-                len(selected_words) < len(all_words):
+        with open(GlobalConfig().DATABASE, 'r', encoding="utf-8") as csvfile:
+            reader = csv.reader(csvfile)
+            all_words = [row for row in reader]
+
+        no_words = min(int(args[0]), len(all_words))
+        for nr in range(1, no_words + 1):
             word = choice(all_words)
-        selected_words.append(word)
+            while word in selected_words and \
+                    len(selected_words) < len(all_words):
+                word = choice(all_words)
+            selected_words.append(word)
 
-        await ctx.send(f"👉 {nr}: {word[0]}")
-        try:
-            m = await BOT.wait_for(
-                'message',
-                check=lambda m: m.author == ctx.author,
-                timeout=GlobalConfig().TIMEOUT
-            )
+            await ctx.send(f"👉 {nr}: {word[0]}")
+            try:
+                m = await BOT.wait_for(
+                    'message',
+                    check=lambda m: m.author == ctx.author,
+                    timeout=GlobalConfig().TIMEOUT
+                )
+                if word[1] == m.content.lower():
+                    await ctx.send("✅ Dobrze.")
+                else:
+                    wrong_words.append(word)
+                    await ctx.send(f"❌ Źle. Poprawna odpowiedź: {word[1]}")
+            except TimeoutError:
+                await ctx.send("⏰ Koniec czasu")
+                wrong_words.append(word)
+
+        if wrong_words:
+            await ctx.send("😫 Poprawmy słowa, które były źle:")
+
+        wrong_answers = 0
+        while wrong_words:
+            if wrong_answers >= GlobalConfig().MAX_WRONG_ANSWERS:
+                await ctx.send("🤡 Za dużo błędnych odpowiedzi. Koniec nauki.")
+                return
+            word = choice(wrong_words)
+            await ctx.send(f"👉 {word[0]}:")
+            try:
+                m = await BOT.wait_for(
+                    'message',
+                    check=lambda m: m.author == ctx.author,
+                    timeout=GlobalConfig().TIMEOUT
+                )
+            except TimeoutError:
+                await ctx.send("⏰ Koniec czasu")
+                wrong_answers += 1
+                continue
+
             if word[1] == m.content.lower():
                 await ctx.send("✅ Dobrze.")
+                wrong_words.remove(word)
             else:
-                wrong_words.append(word)
                 await ctx.send(f"❌ Źle. Poprawna odpowiedź: {word[1]}")
-        except TimeoutError:
-            await ctx.send("⏰ Koniec czasu")
-            wrong_words.append(word)
+                wrong_answers += 1
 
-    if wrong_words:
-        await ctx.send("😫 Poprawmy słowa, które były źle:")
-
-    wrong_answers = 0
-    while wrong_words:
-        if wrong_answers >= GlobalConfig().MAX_WRONG_ANSWERS:
-            await ctx.send("🤡 Za dużo błędnych odpowiedzi. Koniec nauki.")
-            return
-        word = choice(wrong_words)
-        await ctx.send(f"👉 {word[0]}:")
-        try:
-            m = await BOT.wait_for(
-                'message',
-                check=lambda m: m.author == ctx.author,
-                timeout=GlobalConfig().TIMEOUT
-            )
-        except TimeoutError:
-            await ctx.send("⏰ Koniec czasu")
-            wrong_answers += 1
-            continue
-
-        if word[1] == m.content.lower():
-            await ctx.send("✅ Dobrze.")
-            wrong_words.remove(word)
-        else:
-            await ctx.send(f"❌ Źle. Poprawna odpowiedź: {word[1]}")
-            wrong_answers += 1
-
-    await ctx.send("🤗 Koniec nauki.")
+        await ctx.send("🤗 Koniec nauki.")
 
 
 @BOT.command(name='u')
-@execute_if_not_busy
 async def update(ctx, *args):
-    if len(args) != 1:
-        await ctx.send("🤔 Podaj słowo do poprawy.")
-        try:
-            m = await BOT.wait_for(
-                'message',
-                check=lambda m: m.author == ctx.author,
-                timeout=GlobalConfig().TIMEOUT  # Timeout set to 10 seconds
-            )
-            m = m.content
-        except TimeoutError:
-            await ctx.send("⏰ Nie podałeś słowa do poprawy.")
-            return
-    else:
-        m = args[0]
+    if BusyContextManager.is_busy():
+        return
 
-    tempfile = NamedTemporaryFile(mode='w', delete=False, encoding="utf-8")
-    word_found = False
-    with open(
-            GlobalConfig().DATABASE, 'r', encoding="utf-8"
-            ) as csvfile, tempfile:
-        reader = csv.DictReader(csvfile, fieldnames=GlobalConfig().FIELDS)
-        writer = csv.DictWriter(tempfile, fieldnames=GlobalConfig().FIELDS)
-        for row in reader:
-            if row['word'] == m.lower():
-                word_found = True
-                await ctx.send(
-                    f"Obecne tłumaczenie: {row['word']} 👉 {row['translation']}"
+    with BusyContextManager():
+        if len(args) != 1:
+            await ctx.send("🤔 Podaj słowo do poprawy.")
+            try:
+                m = await BOT.wait_for(
+                    'message',
+                    check=lambda m: m.author == ctx.author,
+                    timeout=GlobalConfig().TIMEOUT  # Timeout set to 10 seconds
                 )
+                m = m.content
+            except TimeoutError:
+                await ctx.send("⏰ Nie podałeś słowa do poprawy.")
+                return
+        else:
+            m = args[0]
 
-                await ctx.send(
-                    "👏 Podaj nowe tłumaczenie: "
-                )
-                try:
-                    m = await BOT.wait_for(
-                        'message',
-                        check=lambda m: m.author == ctx.author,
-                        timeout=GlobalConfig().TIMEOUT
+        tempfile = NamedTemporaryFile(mode='w', delete=False, encoding="utf-8")
+        word_found = False
+        with open(
+                GlobalConfig().DATABASE, 'r', encoding="utf-8"
+                ) as csvfile, tempfile:
+            reader = csv.DictReader(csvfile, fieldnames=GlobalConfig().FIELDS)
+            writer = csv.DictWriter(tempfile, fieldnames=GlobalConfig().FIELDS)
+            for row in reader:
+                if row['word'] == m.lower():
+                    word_found = True
+                    await ctx.send(
+                        f"Obecne tłumaczenie: {row['word']} 👉 {row['translation']}"
                     )
-                    m = m.content
-                except TimeoutError:
-                    await ctx.send("⏰ Nie podałeś nowego tłumaczenia.")
-                    return
 
-                row['translation'] = m.lower()
-            row = {
-                'word': row['word'],
-                'translation': row['translation'],
-                'timestamp': row['timestamp']
-            }
-            writer.writerow(row)
+                    await ctx.send(
+                        "👏 Podaj nowe tłumaczenie: "
+                    )
+                    try:
+                        m = await BOT.wait_for(
+                            'message',
+                            check=lambda m: m.author == ctx.author,
+                            timeout=GlobalConfig().TIMEOUT
+                        )
+                        m = m.content
+                    except TimeoutError:
+                        await ctx.send("⏰ Nie podałeś nowego tłumaczenia.")
+                        return
 
-    shutil.move(tempfile.name, GlobalConfig().DATABASE)
+                    row['translation'] = m.lower()
+                row = {
+                    'word': row['word'],
+                    'translation': row['translation'],
+                    'timestamp': row['timestamp']
+                }
+                writer.writerow(row)
 
-    if word_found:
-        await ctx.send("🤗 Słowo poprawione.")
-    else:
-        await ctx.send("😫 Nie znaleziono słowa.")
+        shutil.move(tempfile.name, GlobalConfig().DATABASE)
+
+        if word_found:
+            await ctx.send("🤗 Słowo poprawione.")
+        else:
+            await ctx.send("😫 Nie znaleziono słowa.")
 
 
 @BOT.command(name='d')
-@execute_if_not_busy
 async def delete(ctx, *args):
-    if len(args) != 1:
-        await ctx.send("🤔 Podaj słowo do usunięcia.")
-        try:
-            m = await BOT.wait_for(
-                'message',
-                check=lambda m: m.author == ctx.author,
-                timeout=GlobalConfig().TIMEOUT  # Timeout set to 10 seconds
-            )
-            m = m.content
-        except TimeoutError:
-            await ctx.send("⏰ Nie podałeś słowa do usunięcia.")
-            return
-    else:
-        m = args[0]
+    if BusyContextManager.is_busy():
+        return
 
-    tempfile = NamedTemporaryFile(mode='w', delete=False, encoding="utf-8")
-    word_found = False
-    with open(
-            GlobalConfig().DATABASE, 'r', encoding="utf-8"
-            ) as csvfile, tempfile:
-        reader = csv.DictReader(csvfile, fieldnames=GlobalConfig().FIELDS)
-        writer = csv.DictWriter(tempfile, fieldnames=GlobalConfig().FIELDS)
-        for row in reader:
-            if row['word'] == m.lower():
-                word_found = True
-                continue
-            writer.writerow(row)
+    with BusyContextManager():
+        if len(args) != 1:
+            await ctx.send("🤔 Podaj słowo do usunięcia.")
+            try:
+                m = await BOT.wait_for(
+                    'message',
+                    check=lambda m: m.author == ctx.author,
+                    timeout=GlobalConfig().TIMEOUT  # Timeout set to 10 seconds
+                )
+                m = m.content
+            except TimeoutError:
+                await ctx.send("⏰ Nie podałeś słowa do usunięcia.")
+                return
+        else:
+            m = args[0]
 
-    shutil.move(tempfile.name, GlobalConfig().DATABASE)
+        tempfile = NamedTemporaryFile(mode='w', delete=False, encoding="utf-8")
+        word_found = False
+        with open(
+                GlobalConfig().DATABASE, 'r', encoding="utf-8"
+                ) as csvfile, tempfile:
+            reader = csv.DictReader(csvfile, fieldnames=GlobalConfig().FIELDS)
+            writer = csv.DictWriter(tempfile, fieldnames=GlobalConfig().FIELDS)
+            for row in reader:
+                if row['word'] == m.lower():
+                    word_found = True
+                    continue
+                writer.writerow(row)
 
-    if word_found:
-        await ctx.send("🤗 Słowo usunięte.")
-    else:
-        await ctx.send("😫 Nie znaleziono słowa.")
+        shutil.move(tempfile.name, GlobalConfig().DATABASE)
+
+        if word_found:
+            await ctx.send("🤗 Słowo usunięte.")
+        else:
+            await ctx.send("😫 Nie znaleziono słowa.")

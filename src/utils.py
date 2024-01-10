@@ -1,14 +1,17 @@
 IS_BUSY = False
 
 
-def execute_if_not_busy(func):
-    async def wrapper(*args, **kwargs):
+class BusyContextManager:
+    @staticmethod
+    def is_busy():
+        return IS_BUSY
+
+    def __enter__(self):
         global IS_BUSY
-        if not IS_BUSY:
+        if IS_BUSY:
+            raise RuntimeError("Resource is already busy.")
+        IS_BUSY = True
 
-            IS_BUSY = True
-            result = await func(*args, **kwargs)
-            IS_BUSY = False
-
-            return result
-    return wrapper
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        global IS_BUSY
+        IS_BUSY = False
