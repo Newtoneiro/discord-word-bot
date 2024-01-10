@@ -38,6 +38,7 @@ Follow these steps to get the bot up and running in your Discord server.
    ```env
    CHANNEL_ID=your_channel_id
    BOT_TOKEN=your_bot_token
+   STORAGE_PATH=your_storage_path
    ```
 
 4. Run the bot:
