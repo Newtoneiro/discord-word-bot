@@ -24,7 +24,7 @@ Follow these steps to get the bot up and running in your Discord server.
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/your-username/your-repo.git
+   git clone https://github.com/Newtoneiro/discord-word-bot
    ```
 
 2. Install dependencies:

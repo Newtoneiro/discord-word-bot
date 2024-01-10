@@ -5,9 +5,11 @@ from time import time
 from discord.ext import commands
 import discord
 from random import choice
+from tempfile import NamedTemporaryFile
+import shutil
 
 from src.config import DATABASE, COMMAND_PREFIX, \
-                       TIMEOUT, MAX_WRONG_ANSWERS
+                       TIMEOUT, MAX_WRONG_ANSWERS, FIELDS
 
 
 BOT = commands.Bot(
@@ -71,7 +73,7 @@ async def add_to_dictionary(ctx, *args):
 
 @BOT.command(name='l')
 async def learn(ctx, *args):
-    if len(args) == 0:
+    if len(args) != 1:
         await ctx.send("🤔 Podaj ilość słów:")
         try:
             m = await BOT.wait_for(
@@ -144,3 +146,98 @@ async def learn(ctx, *args):
             wrong_answers += 1
 
     await ctx.send("🤗 Koniec nauki.")
+
+
+@BOT.command(name='u')
+async def update(ctx, *args):
+    if len(args) != 1:
+        await ctx.send("🤔 Podaj słowo do poprawy.")
+        try:
+            m = await BOT.wait_for(
+                'message',
+                check=lambda m: m.author == ctx.author,
+                timeout=TIMEOUT  # Timeout set to 10 seconds
+            )
+            m = m.content
+        except TimeoutError:
+            await ctx.send("⏰ Nie podałeś słowa do poprawy.")
+            return
+    else:
+        m = args[0]
+
+    tempfile = NamedTemporaryFile(mode='w', delete=False, encoding="utf-8")
+    word_found = False
+    with open(DATABASE, 'r', encoding="utf-8") as csvfile, tempfile:
+        reader = csv.DictReader(csvfile, fieldnames=FIELDS)
+        writer = csv.DictWriter(tempfile, fieldnames=FIELDS)
+        for row in reader:
+            if row['word'] == m.lower():
+                word_found = True
+                await ctx.send(
+                    f"Obecne tłumaczenie: {row['word']} 👉 {row['translation']}"
+                )
+
+                await ctx.send(
+                    "👏 Podaj nowe tłumaczenie: "
+                )
+                try:
+                    m = await BOT.wait_for(
+                        'message',
+                        check=lambda m: m.author == ctx.author,
+                        timeout=TIMEOUT  # Timeout set to 10 seconds
+                    )
+                    m = m.content
+                except TimeoutError:
+                    await ctx.send("⏰ Nie podałeś nowego tłumaczenia.")
+                    return
+
+                row['translation'] = m.lower()
+            row = {
+                'word': row['word'],
+                'translation': row['translation'],
+                'timestamp': row['timestamp']
+            }
+            writer.writerow(row)
+
+    shutil.move(tempfile.name, DATABASE)
+
+    if word_found:
+        await ctx.send("🤗 Słowo poprawione.")
+    else:
+        await ctx.send("😫 Nie znaleziono słowa.")
+
+
+@BOT.command(name='d')
+async def delete(ctx, *args):
+    if len(args) != 1:
+        await ctx.send("🤔 Podaj słowo do usunięcia.")
+        try:
+            m = await BOT.wait_for(
+                'message',
+                check=lambda m: m.author == ctx.author,
+                timeout=TIMEOUT  # Timeout set to 10 seconds
+            )
+            m = m.content
+        except TimeoutError:
+            await ctx.send("⏰ Nie podałeś słowa do usunięcia.")
+            return
+    else:
+        m = args[0]
+
+    tempfile = NamedTemporaryFile(mode='w', delete=False, encoding="utf-8")
+    word_found = False
+    with open(DATABASE, 'r', encoding="utf-8") as csvfile, tempfile:
+        reader = csv.DictReader(csvfile, fieldnames=FIELDS)
+        writer = csv.DictWriter(tempfile, fieldnames=FIELDS)
+        for row in reader:
+            if row['word'] == m.lower():
+                word_found = True
+                continue
+            writer.writerow(row)
+
+    shutil.move(tempfile.name, DATABASE)
+
+    if word_found:
+        await ctx.send("🤗 Słowo usunięte.")
+    else:
+        await ctx.send("😫 Nie znaleziono słowa.")
