@@ -190,10 +190,10 @@ async def update(ctx, *args):
         else:
             m = args[0]
 
-        tempfile = NamedTemporaryFile(mode='w', delete=False, encoding="utf-8")
+        tempfile = NamedTemporaryFile(mode='w', delete=False, encoding="utf-8", newline='')
         word_found = False
         with open(
-                GlobalConfig().DATABASE, 'r', encoding="utf-8"
+                GlobalConfig().DATABASE, 'r', encoding="utf-8", newline=''
                 ) as csvfile, tempfile:
             reader = csv.DictReader(csvfile, fieldnames=GlobalConfig().FIELDS)
             writer = csv.DictWriter(tempfile, fieldnames=GlobalConfig().FIELDS)
@@ -255,10 +255,12 @@ async def delete(ctx, *args):
         else:
             m = args[0]
 
-        tempfile = NamedTemporaryFile(mode='w', delete=False, encoding="utf-8")
+        tempfile = NamedTemporaryFile(
+            mode='w', delete=False, encoding="utf-8", newline=''
+        )
         word_found = False
         with open(
-                GlobalConfig().DATABASE, 'r', encoding="utf-8"
+                GlobalConfig().DATABASE, 'r', encoding="utf-8", newline=''
                 ) as csvfile, tempfile:
             reader = csv.DictReader(csvfile, fieldnames=GlobalConfig().FIELDS)
             writer = csv.DictWriter(tempfile, fieldnames=GlobalConfig().FIELDS)
