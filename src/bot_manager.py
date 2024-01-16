@@ -7,6 +7,7 @@ import discord
 from random import choice
 from tempfile import NamedTemporaryFile
 import shutil
+from unidecode import unidecode
 
 from src.config import GlobalConfig
 from src.utils import BusyContextManager
@@ -83,6 +84,9 @@ async def add_to_dictionary(ctx, *args):
 
 @BOT.command(name='l')
 async def learn(ctx, *args):
+    def answers_compare(expected: str, answer: str):
+        return unidecode(answer.lower()) == unidecode(expected.lower())
+
     if BusyContextManager.is_busy():
         return
 
@@ -129,7 +133,7 @@ async def learn(ctx, *args):
                     check=lambda m: m.author == ctx.author,
                     timeout=GlobalConfig().TIMEOUT
                 )
-                if word[1] == m.content.lower():
+                if answers_compare(word[1], m.content):
                     await ctx.send("✅ Dobrze.")
                 else:
                     wrong_words.append(word)
@@ -159,7 +163,7 @@ async def learn(ctx, *args):
                 wrong_answers += 1
                 continue
 
-            if word[1] == m.content.lower():
+            if answers_compare(word[1], m.content):
                 await ctx.send("✅ Dobrze.")
                 wrong_words.remove(word)
             else:
