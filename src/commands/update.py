@@ -1,8 +1,8 @@
-import csv
 import shutil
 from tempfile import NamedTemporaryFile
+from dataclass_csv import DataclassReader, DataclassWriter
 
-from src.utils import BusyContextManager
+from src.utils import BusyContextManager, Word
 from src.config import GlobalConfig
 from src.bot import BOT
 
@@ -32,17 +32,18 @@ async def update(ctx, *args):
             mode='w', delete=False, encoding="utf-8", newline=''
         )
         word_found = False
+        words_to_save = []
         with open(
                 GlobalConfig().DATABASE, 'r', encoding="utf-8", newline=''
                 ) as csvfile, tempfile:
-            reader = csv.DictReader(csvfile, fieldnames=GlobalConfig().FIELDS)
-            writer = csv.DictWriter(tempfile, fieldnames=GlobalConfig().FIELDS)
-            for row in reader:
-                if row['word'] == m.lower():
+            reader = DataclassReader(csvfile, Word)
+
+            for word in reader:
+                if word.word_eng == m.lower():
                     word_found = True
                     await ctx.send(
-                        f"Obecne tłumaczenie: {row['word']}" +
-                        f"👉 {row['translation']}"
+                        f"Obecne tłumaczenie: {word.word_eng} " +
+                        f"👉 {word.word_pl}"
                     )
 
                     await ctx.send(
@@ -59,13 +60,14 @@ async def update(ctx, *args):
                         await ctx.send("⏰ Nie podałeś nowego tłumaczenia.")
                         return
 
-                    row['translation'] = m.lower()
-                row = {
-                    'word': row['word'],
-                    'translation': row['translation'],
-                    'timestamp': row['timestamp']
-                }
-                writer.writerow(row)
+                    word.word_pl = m.lower()
+                words_to_save.append(word)
+
+            DataclassWriter(
+                tempfile,
+                words_to_save,
+                Word
+            ).write()
 
         shutil.move(tempfile.name, GlobalConfig().DATABASE)
 

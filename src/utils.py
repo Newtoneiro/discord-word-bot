@@ -1,3 +1,6 @@
+from dataclasses import dataclass
+
+
 IS_BUSY = False
 
 
@@ -15,3 +18,12 @@ class BusyContextManager:
     def __exit__(self, exc_type, exc_val, exc_tb):
         global IS_BUSY
         IS_BUSY = False
+
+
+@dataclass
+class Word:
+    word_eng: str
+    word_pl: str
+    timestamp: float
+    no_correct: int
+    no_wrong: int

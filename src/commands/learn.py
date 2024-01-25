@@ -1,8 +1,8 @@
-import csv
 from unidecode import unidecode
 from random import choice
+from dataclass_csv import DataclassReader
 
-from src.utils import BusyContextManager
+from src.utils import BusyContextManager, Word
 from src.config import GlobalConfig
 from src.bot import BOT
 
@@ -40,7 +40,7 @@ async def learn(ctx, *args):
         selected_words = []
 
         with open(GlobalConfig().DATABASE, 'r', encoding="utf-8") as csvfile:
-            reader = csv.reader(csvfile)
+            reader = DataclassReader(csvfile, Word)
             all_words = [row for row in reader]
 
         no_words = min(int(args[0]), len(all_words))
@@ -51,18 +51,20 @@ async def learn(ctx, *args):
                 word = choice(all_words)
             selected_words.append(word)
 
-            await ctx.send(f"👉 {nr}: {word[0]}")
+            await ctx.send(f"👉 {nr}: {word.word_eng}")
             try:
                 m = await BOT.wait_for(
                     'message',
                     check=lambda m: m.author == ctx.author,
                     timeout=GlobalConfig().TIMEOUT
                 )
-                if answers_compare(word[1], m.content):
+                if answers_compare(word.word_pl, m.content):
                     await ctx.send("✅ Dobrze.")
                 else:
                     wrong_words.append(word)
-                    await ctx.send(f"❌ Źle. Poprawna odpowiedź: {word[1]}")
+                    await ctx.send(
+                        f"❌ Źle. Poprawna odpowiedź: {word.word_pl}"
+                    )
             except TimeoutError:
                 await ctx.send("⏰ Koniec czasu")
                 wrong_words.append(word)
@@ -76,7 +78,7 @@ async def learn(ctx, *args):
                 await ctx.send("🤡 Za dużo błędnych odpowiedzi. Koniec nauki.")
                 return
             word = choice(wrong_words)
-            await ctx.send(f"👉 {word[0]}:")
+            await ctx.send(f"👉 {word.word_eng}:")
             try:
                 m = await BOT.wait_for(
                     'message',
@@ -88,11 +90,11 @@ async def learn(ctx, *args):
                 wrong_answers += 1
                 continue
 
-            if answers_compare(word[1], m.content):
+            if answers_compare(word.word_pl, m.content):
                 await ctx.send("✅ Dobrze.")
                 wrong_words.remove(word)
             else:
-                await ctx.send(f"❌ Źle. Poprawna odpowiedź: {word[1]}")
+                await ctx.send(f"❌ Źle. Poprawna odpowiedź: {word.word_pl}")
                 wrong_answers += 1
 
         await ctx.send("🤗 Koniec nauki.")

@@ -1,8 +1,8 @@
-import csv
 import shutil
+from dataclass_csv import DataclassReader, DataclassWriter
 from tempfile import NamedTemporaryFile
 
-from src.utils import BusyContextManager
+from src.utils import BusyContextManager, Word
 from src.config import GlobalConfig
 from src.bot import BOT
 
@@ -32,17 +32,22 @@ async def delete(ctx, *args):
             mode='w', delete=False, encoding="utf-8", newline=''
         )
         word_found = False
+        words_to_save = []
         with open(
                 GlobalConfig().DATABASE, 'r', encoding="utf-8", newline=''
                 ) as csvfile, tempfile:
-            reader = csv.DictReader(csvfile, fieldnames=GlobalConfig().FIELDS)
-            writer = csv.DictWriter(tempfile, fieldnames=GlobalConfig().FIELDS)
-            for row in reader:
-                if row['word'] == m.lower():
+            reader = DataclassReader(csvfile, Word)
+            for word in reader:
+                if word.word_eng == m.lower():
                     word_found = True
                     continue
-                writer.writerow(row)
+                words_to_save.append(word)
 
+            DataclassWriter(
+                tempfile,
+                words_to_save,
+                Word
+            ).write()
         shutil.move(tempfile.name, GlobalConfig().DATABASE)
 
         if word_found:
